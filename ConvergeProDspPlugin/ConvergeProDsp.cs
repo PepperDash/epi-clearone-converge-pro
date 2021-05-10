@@ -34,14 +34,12 @@ namespace ConvergeProDspPlugin
 
         public CommunicationGather PortGather { get; private set; }
 		public Dictionary<string, ConvergeProDspLevelControl> LevelControlPoints { get; private set; }
-		public List<ConvergeProDspPresets> PresetList = new List<ConvergeProDspPresets>();
+		public List<ConvergeProDspPreset> PresetList = new List<ConvergeProDspPreset>();
 
 		private readonly ConvergeProDspConfig _config;
-		private CrestronQueue CommandQueue;
-		bool CommandQueueInProgress = false;
-		uint HeartbeatTracker = 0;
+		private uint HeartbeatTracker = 0;
 		public bool ShowHexResponse { get; set; }
-        public readonly string DeviceId;
+        public string DeviceId { get; set; }
 		
 		
 		/// <summary>
@@ -63,13 +61,12 @@ namespace ConvergeProDspPlugin
                 DeviceId = _config.DeviceId;
             }
 
-			CommandQueue = new CrestronQueue(100);
 			_comm = comm;
 
 			PortGather = new CommunicationGather(_comm, "\x0a");
 			PortGather.LineReceived += this.Port_LineReceived;
 
-			_commMonitor = new GenericCommunicationMonitor(this, _comm, 20000, 120000, 300000, CheckSubscriptions);
+			_commMonitor = new GenericCommunicationMonitor(this, _comm, 30000, 121000, 301000, CheckComms);
 
 			LevelControlPoints = new Dictionary<string, ConvergeProDspLevelControl>();
 			CreateDspObjects();
@@ -82,23 +79,17 @@ namespace ConvergeProDspPlugin
 		public override bool CustomActivate()
 		{
 			_comm.Connect();
-			_commMonitor.StatusChange += 
-                (o, a) => Debug.Console(2, this, "Communication monitor state: {0}", _commMonitor.Status);
+			_commMonitor.StatusChange += new EventHandler<MonitorStatusChangeEventArgs>(ConnectionChange);
 
             return base.CustomActivate();
 		}
 
-		private void socket_ConnectionChange(object sender, GenericSocketStatusChageEventArgs e)
+		private void ConnectionChange(object sender, MonitorStatusChangeEventArgs e)
 		{
-			if (e.Client.IsConnected)
+            Debug.Console(2, this, "Communication monitor state: {0}", e.Status);
+            if (e.Status == MonitorStatus.IsOk)
 			{
 				InitializeDspObjects();
-			}
-			else
-			{
-				// Cleanup items from this session
-				CommandQueue.Clear();
-				CommandQueueInProgress = false;
 			}
 		}
 
@@ -111,18 +102,16 @@ namespace ConvergeProDspPlugin
 			{
 				foreach (KeyValuePair<string, ConvergeProDspLevelControlBlockConfig> block in _config.LevelControlBlocks)
 				{
-					var value = block.Value;
-                    this.LevelControlPoints.Add(block.Key, new ConvergeProDspLevelControl(block.Key, value, this));
-					Debug.Console(2, this, "Added LevelControlPoint {0} LevelTag: {1} MuteTag: {2}", block.Key, value.Group, value.Channel);
+                    this.LevelControlPoints.Add(block.Key, new ConvergeProDspLevelControl(block.Key, block.Value, this));
+                    Debug.Console(2, this, "Added LevelControlPoint {0} LevelTag: {1} MuteTag: {2}", block.Key, block.Value.Group, block.Value.Channel);
 				}
 			}
 			if (_config.Presets != null)
 			{
-				foreach (KeyValuePair<string, ConvergeProDspPresets> preset in _config.Presets)
+				foreach (KeyValuePair<string, ConvergeProDspPreset> preset in _config.Presets)
 				{
-					var value = preset.Value;
-					this.addPreset(value);
-					Debug.Console(2, this, "Added Preset {0} {1}", value.Label, value.Preset);
+                    this.addPreset(preset.Value);
+                    Debug.Console(2, this, "Added Preset {0} {1}", preset.Value.Label, preset.Value.Preset);
 				}
 			}
 
@@ -130,24 +119,20 @@ namespace ConvergeProDspPlugin
 		}
 
 		/// <summary>
-		/// Checks the subscription health, should be called by comm monitor only. If no heartbeat has been detected recently, will resubscribe and log error.
+		/// Checks the comm health, should be called by comm monitor only. If no heartbeat has been detected recently, will clear the queue and log an error.
 		/// </summary>
-		void CheckSubscriptions()
+		private void CheckComms()
 		{
 			HeartbeatTracker++;
-			SendLine("INFO");
+			SendLine("VER");
 			CrestronEnvironment.Sleep(1000);
 
 			if (HeartbeatTracker > 0)
 			{
 				Debug.Console(1, this, "Heartbeat missed, count {0}", HeartbeatTracker);
-				if (HeartbeatTracker % 5 == 0)
-				{
-					Debug.Console(1, this, "Heartbeat missed 5 times, attempting reinit");
-					if (HeartbeatTracker == 5)
-						Debug.LogError(Debug.ErrorLogLevel.Warning, "Heartbeat missed 5 times");
-					InitializeDspObjects();
-				}
+
+				if (HeartbeatTracker == 5)
+					Debug.LogError(Debug.ErrorLogLevel.Warning, "Heartbeat missed 5 times");
 			}
 			else
 			{
@@ -160,14 +145,15 @@ namespace ConvergeProDspPlugin
 		/// </summary>
 		void InitializeDspObjects()
 		{
-
 			if (_commMonitor != null)
 			{
 				_commMonitor.Start();
 			}
 
-			if (!CommandQueueInProgress)
-				SendNextQueuedCommand();
+            foreach (var channel in LevelControlPoints)
+            {
+                channel.Value.GetMinMax();
+            }
 		}
 
 		/// <summary>
@@ -180,36 +166,29 @@ namespace ConvergeProDspPlugin
 			Debug.Console(2, this, "RX: '{0}'", args.Text);
 			try
 			{
-				if (args.Text.EndsWith("cgpa\r"))
-				{
-					Debug.Console(1, this, "Found poll response");
-					HeartbeatTracker = 0;
-				}
-				if (args.Text.IndexOf("sr ") > -1)
-				{
-				}
-				else if (args.Text.IndexOf("cv") > -1)
-				{
-                    var changeMessage = Regex.Split(args.Text, " (?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");   //Splits by space unless enclosed in double quotes using look ahead method: https://stackoverflow.com/questions/18893390/splitting-on-comma-outside-quotes
+                if (args.Text.Contains("#"))
+                {
+                    var startPoint = args.Text.IndexOf("#", 0);                          //example = #12 MUTE 5 M 0
+                    HeartbeatTracker = 0;
+                    string[] data = args.Text.Remove(0, startPoint + 1).Split(' ');      //example = [12, MUTE, 5, M, 0]
 
-                    string changedInstance = changeMessage[1].Replace("\"", "");
-					Debug.Console(1, this, "cv parse Instance: {0}", changedInstance);
-					foreach (KeyValuePair<string, ConvergeProDspLevelControl> controlPoint in LevelControlPoints)
-					{
-                        if (changedInstance == controlPoint.Value.Group)
-						{
-							controlPoint.Value.ParseSubscriptionMessage(changedInstance, changeMessage[4], changeMessage[3]);
-							return;
-						}
-
-                        else if (changedInstance == controlPoint.Value.Channel)
-						{
-							controlPoint.Value.ParseSubscriptionMessage(changedInstance, changeMessage[2].Replace("\"", ""), null);
-							return;
-						}
-
-					}
-				}
+                    if((data.Length >= 5 && (data[1] == "MUTE" || data[1] == "GAIN")) || (data.Length >=6 && data[1] == "MINMAX"))
+                    {
+                        Debug.Console(1, this, "Found {0} response", data[1]);
+                        foreach (KeyValuePair<string, ConvergeProDspLevelControl> controlPoint in LevelControlPoints)
+					    {
+                            if (data[0] == controlPoint.Value.DeviceId && data[1] == controlPoint.Value.Channel && data[3] == controlPoint.Value.Group)
+						    {
+                                controlPoint.Value.ParseResponse(data[1], data.Skip(4).ToArray());  //send command and any values after the group/channel info
+							    return;
+						    }
+					    }
+				    }
+                }
+                else
+                {
+                    Debug.Console(1, this, "No valid response found, discarding data");
+                }
 			}
 			catch (Exception e)
 			{
@@ -226,76 +205,23 @@ namespace ConvergeProDspPlugin
 		public void SendLine(string s)
 		{
 			Debug.Console(1, this, "TX: '{0}'", s);
-			_comm.SendText(s + "\x0a");
-		}
-
-		/// <summary>
-		/// Adds a command from a child module to the queue
-		/// </summary>
-		/// <param name="commandToEnqueue">Command object from child module</param>
-		public void EnqueueCommand(QueuedCommand commandToEnqueue)
-		{
-			CommandQueue.Enqueue(commandToEnqueue);
-			//Debug.Console(1, this, "Command (QueuedCommand) Enqueued '{0}'.  CommandQueue has '{1}' Elements.", commandToEnqueue.Command, CommandQueue.Count);
-
-			if (!CommandQueueInProgress)
-				SendNextQueuedCommand();
-		}
-
-		/// <summary>
-		/// Adds a raw string command to the queue
-		/// </summary>
-		/// <param name="command"></param>
-		public void EnqueueCommand(string command)
-		{
-			CommandQueue.Enqueue(command);
-			//Debug.Console(1, this, "Command (string) Enqueued '{0}'.  CommandQueue has '{1}' Elements.", command, CommandQueue.Count);
-
-			if (!CommandQueueInProgress)
-				SendNextQueuedCommand();
-		}
-
-		/// <summary>
-		/// Sends the next queued command to the DSP
-		/// </summary>
-		void SendNextQueuedCommand()
-		{
-			if (_comm.IsConnected && !CommandQueue.IsEmpty)
-			{
-				CommandQueueInProgress = true;
-
-				if (CommandQueue.Peek() is QueuedCommand)
-				{
-					QueuedCommand nextCommand = new QueuedCommand();
-
-					nextCommand = (QueuedCommand)CommandQueue.Peek();
-
-					SendLine(nextCommand.Command);
-				}
-				else
-				{
-					string nextCommand = (string)CommandQueue.Peek();
-
-					SendLine(nextCommand);
-				}
-			}
-
+			_comm.SendText(s + "\x0D");
 		}
 
 		/// <summary>
 		/// Runs the preset with the number provided
 		/// </summary>
 		/// <param name="n">ushort</param>
-		public void RunPresetNumber(ushort n)
+		public void RunPreset(ConvergeProDspPreset preset)
 		{
-			RunPreset(PresetList[n].Preset);
+	        RunPresetByString(preset.Preset);
 		}
 
 		/// <summary>
 		/// Adds a presst
 		/// </summary>
 		/// <param name="s">ConvergeProDspPresets</param>
-		public void addPreset(ConvergeProDspPresets s)
+		public void addPreset(ConvergeProDspPreset s)
 		{
 			PresetList.Add(s);
 		}
@@ -304,10 +230,9 @@ namespace ConvergeProDspPlugin
 		/// Sends a command to execute a preset
 		/// </summary>
 		/// <param name="name">Preset Name</param>
-		public void RunPreset(string name)
+		public void RunPresetByString(string preset)
 		{
-			SendLine(string.Format("ssl {0}", name));
-			SendLine("cgp 1");
+			SendLine(string.Format("#{0} MACRO {1}", DeviceId,  preset));
 		}
 
 		/// <summary>
@@ -376,17 +301,18 @@ namespace ConvergeProDspPlugin
 
 
             // Presets 
-            x = 0;
+            x = 1;
             // from SiMPL > to Plugin
             foreach (var preset in PresetList)
             {
+                var thisPreset = preset as ConvergeProDspPreset;
                 if (x > 100)
                 {
                     break;
                 }
                 // from SiMPL > to Plugin
-                trilist.StringInput[joinMap.PresetName.JoinNumber + x + 1].StringValue = preset.Label;
-                trilist.SetSigTrueAction(joinMap.PresetRecall.JoinNumber + x + 1, () => RunPresetNumber(x));
+                trilist.StringInput[joinMap.PresetName.JoinNumber + x].StringValue = preset.Label;
+                trilist.SetSigTrueAction(joinMap.PresetRecall.JoinNumber + x, () => RunPreset(thisPreset));
                 x++;
             }
         }

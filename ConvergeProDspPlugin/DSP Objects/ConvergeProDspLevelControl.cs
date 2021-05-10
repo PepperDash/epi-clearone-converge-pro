@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using Crestron.SimplSharp;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
@@ -19,24 +20,19 @@ namespace ConvergeProDspPlugin
 	    private readonly ConvergeProDsp _parent;
 
 		/// <summary>
-		/// Used for to identify level subscription values
+		/// Used for debug
 		/// </summary>
 		public string LevelCustomName { get; private set; }
 
 		/// <summary>
-		/// Used for to identify mute subscription values
-		/// </summary>
-		public string MuteCustomName { get; private set; }
-
-		/// <summary>
 		/// Minimum fader level
 		/// </summary>
-		double MinLevel;
+		private float minLevel;
 
 		/// <summary>
 		/// Maximum fader level
 		/// </summary>
-		double MaxLevel;
+		private float maxLevel;
 
 		public bool AutomaticUnmuteOnVolumeUp { get; private set; }
 
@@ -56,13 +52,7 @@ namespace ConvergeProDspPlugin
 		    if (config.Disabled) 
                 return;
 
-		    _parent._commMonitor.IsOnlineFeedback.OutputChange += (sender, args) =>
-		        {
-		            if (!args.BoolValue)
-		                return;
-		        };
-
-			Initialize(key, config);
+            Initialize(key, config);
 		}
 
 		/// <summary>
@@ -76,7 +66,6 @@ namespace ConvergeProDspPlugin
 			Enabled = true;
 			DeviceManager.AddDevice(this);
 			Type = config.IsMic ? ePdtLevelTypes.Microphone : ePdtLevelTypes.Speaker;
-
 			Debug.Console(2, this, "Adding LevelControl '{0}'", Key);
 
 			MuteFeedback = new BoolFeedback(() => _isMuted);
@@ -86,65 +75,73 @@ namespace ConvergeProDspPlugin
 			HasLevel = config.HasLevel;
 			UseAbsoluteValue = config.UseAbsoluteValue;
             Group = config.Group;
-            Channel = config.Channel;            
+            Channel = config.Channel;
+            minLevel = -65;
+            maxLevel = 20;
 		}
 
 		/// <summary>
-		/// Parses the response from the DspBase
+		/// Parses the response from the DSP. Command is "MUTE, GAIN, MINMAX, erc. Values[] is the returned values after the channel and group.
 		/// </summary>
-		/// <param name="customName"></param>
-		/// <param name="value"></param>
-		/// <param name="absoluteValue"></param>
-		public void ParseSubscriptionMessage(string customName, string value, string absoluteValue)
+		/// <param name="command"></param>
+		/// <param name="values"></param>
+		public void ParseResponse(string command, string[] values)
 		{
-			// Check for valid subscription response
-			Debug.Console(1, this, "Level {0} Response: '{1}'", customName, value);
-			if (
-                !String.IsNullOrEmpty(Channel) 
-                && customName.Equals(Channel, StringComparison.OrdinalIgnoreCase))
+			if(command == "MUTE")
 			{
-			    switch (value)
+			    if(values[0] == "1")
 			    {
-			        case "true":
-			        case "muted":
-			            _isMuted = true;
-			            break;
-			        case "false":
-			        case "unmuted":
-			            _isMuted = false;
-			            break;
+			        _isMuted = true;
 			    }
-
+                else if(values[0] == "0")
+                {
+                    _isMuted = false;
+                }
 			    MuteFeedback.FireUpdate();
+                return;
 			}
-            else if (
-                !String.IsNullOrEmpty(Group) 
-                && customName.Equals(Group, StringComparison.OrdinalIgnoreCase) 
-                && !UseAbsoluteValue)
+            else if(command == "GAIN")
 			{
-				var parsedValue = Double.Parse(value);
+				float parsedValue = float.Parse(values[0], CultureInfo.InvariantCulture);
 
-                _volumeLevel = (ushort)(parsedValue * 65535);
-				Debug.Console(1, this, "Level {0} VolumeLevel: '{1}'", customName, _volumeLevel);
+                if(UseAbsoluteValue)
+                {
+                    _volumeLevel = (ushort)parsedValue;
+                    Debug.Console(1, this, "Level {0} VolumeLevel: '{1}'", LevelCustomName, _volumeLevel);
+                }
+                else if (maxLevel > minLevel)
+                {
+                    _volumeLevel = (ushort)(((parsedValue - minLevel) * 65535) / (maxLevel - minLevel));
+                    Debug.Console(1, this, "Level {0} VolumeLevel: '{1}'", LevelCustomName, _volumeLevel);
+                }
+                else
+                {
+                    Debug.Console(1, this, "Min and Max levels not valid for level {0}", LevelCustomName);
+                    return;
+                }	
 
 				VolumeLevelFeedback.FireUpdate();
+                return;
 			}
-			else if (
-                !String.IsNullOrEmpty(Group)
-                && customName.Equals(Group, StringComparison.OrdinalIgnoreCase) 
-                && UseAbsoluteValue)
+			else if(command == "MINMAX")
 			{
-
-				_volumeLevel = ushort.Parse(absoluteValue);
-				Debug.Console(1, this, "Level {0} VolumeLevel: '{1}'", customName, _volumeLevel);
-
-				VolumeLevelFeedback.FireUpdate();
+                minLevel = (ushort)float.Parse(values[0], CultureInfo.InvariantCulture);
+                maxLevel = (ushort)float.Parse(values[1], CultureInfo.InvariantCulture);
+				Debug.Console(1, this, "Level {0} new min: {1}, new max: {2}", LevelCustomName, minLevel, maxLevel);
 			}
 		}
 
         private void simpleCommand(string command, string value)
         {
             SendFullCommand(command, new string[] { Channel, Group, value });
+        }
+
+        /// <summary>
+        /// Polls the DSP for the min and max levels for this object
+        /// </summary>
+        public void GetMinMax()
+        {
+            SendFullCommand("MINMAX", new string[] { Channel, Group });
         }
 
 		/// <summary>
@@ -174,15 +171,15 @@ namespace ConvergeProDspPlugin
 			{
 				MuteOff();
 			}
-			if (!UseAbsoluteValue)
+			if (UseAbsoluteValue)
 			{
-				var newLevel = Scale(level);
-				Debug.Console(1, this, "newVolume: {0}", newLevel);
-                SendFullCommand("GAIN", new string[] { Channel, Group, newLevel.ToString(), "R" });
+                SendFullCommand("GAIN", new string[] { Channel, Group, level.ToString(), "A" });
 			}
 			else
 			{
-                SendFullCommand("GAIN", new string[] { Channel, Group, level.ToString(), "A" });
+                var newLevel = Scale(level);
+                Debug.Console(1, this, "newVolume: {0}", newLevel);
+                SendFullCommand("GAIN", new string[] { Channel, Group, newLevel.ToString(), "R" });
 			}
 		}
 
@@ -235,14 +232,11 @@ namespace ConvergeProDspPlugin
 		/// </summary>
 		/// <param name="input"></param>
 		/// <returns></returns>
-		double Scale(double input)
+		double Scale(ushort input)
 		{
-			Debug.Console(1, this, "Scaling (double) input '{0}'", input);
-
-			var output = (input / 65535);
-
-			Debug.Console(1, this, "Scaled output '{0}'", output);
-
+			double scaled = (ushort)(input * (maxLevel - minLevel) / 65535) + minLevel;
+            double output = Math.Round(scaled, 2);
+            Debug.Console(1, this, "Scaled output: {0}", output);
 			return output;
 		}
 	}

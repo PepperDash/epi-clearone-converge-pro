@@ -49,33 +49,30 @@
                     },
                     "deviceId": "30",
                     "levelControlBlocks": {
-                        "levelControlBlocks": {
-                            "fader-1": {
-                                "deviceID": "31",
-                                "label": "Room",
-                                "group": "P",
-                                "channel": "A",
-                                "disabled": false,
-                                "hasLevel": true,
-                                "hasMute": true,
-                                "isMic": false
-                            }
+                        "fader-1": {
+                            "deviceID": "31",
+                            "label": "Room",
+                            "group": "P",
+                            "channel": "A",
+                            "disabled": false,
+                            "hasLevel": true,
+                            "hasMute": true,
+                            "isMic": false
                         }
                     },
                     "presets": {
                         "preset-1": {
                             "deviceID": "31",
                             "label": "System On",
-                            "preset": "PRESET 1"
+                            "preset": "1"
                         },
                         "preset-2": {
-                            "deviceID": "31",
                             "label": "System Off",
-                            "preset": "PRESET 2"
+                            "preset": "2"
                         },
                         "preset-3": {
                             "label": "Default Levels",
-                            "preset": "MACRO 3"
+                            "preset": "3"
                         }
                     }
                 }

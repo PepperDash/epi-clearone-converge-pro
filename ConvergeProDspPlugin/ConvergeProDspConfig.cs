@@ -23,13 +23,13 @@ namespace ConvergeProDspPlugin
 		public Dictionary<string, ConvergeProDspLevelControlBlockConfig> LevelControlBlocks { get; set; }
 
 		[JsonProperty("presets")]
-		public Dictionary<string, ConvergeProDspPresets> Presets { get; set; }
+		public Dictionary<string, ConvergeProDspPreset> Presets { get; set; }
 	}
 
 	/// <summary>
 	/// Converge Pro Presets Configurations
 	/// </summary>
-	public class ConvergeProDspPresets
+	public class ConvergeProDspPreset
 	{
 		[JsonProperty("label")]
 		public string Label { get; set; }

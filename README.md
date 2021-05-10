@@ -79,25 +79,22 @@ Com
 
 
 ### Plugin Preset Configuration Object
-Type can be "PRESET" or "MACRO" depending on which type you want to control.
+In ClearOne these are called "Macros". DeviceId is optional and will use global DeviceId if not defined
 
 ```json
 "properties": {
 	"presets": {
 		"preset-1": {
 			"deviceID": "31",
-			"type": "PRESET",
 			"label": "System On",
 			"preset": "1"
 		},
 		"preset-2": {
-			"deviceID": "31",
 			"label": "System Off",
 			"preset": "2"
 		},
 		"preset-3": {
 			"label": "Default Levels",
-			"type": "MACRO",
 			"preset": "3"
 		}
 	}
@@ -141,32 +138,25 @@ Update the bridge configuration object as needed for the plugin being developed.
 The selection below documents the digital, analog, and serial joins used by the SiMPL EISC. Update the bridge join maps as needed for the plugin being developed.
 
 #### Digitals
-| dig-o (Input/Triggers)                | I/O  | dig-i (Feedback) |
-|---------------------------------------|----- |------------------|
-|                                       | 1    | Is Online        |
-|                                       | 2    |                  |
-|                                       | 3    |                  |
-|                                       | 4    |                  |
-|                                       | 5    |                  |
-| Incoming Call Accept                  | 3136 |                  |
-| Incoming Call Reject                  | 3137 |                  |
+| dig-o (Input/Triggers)     | I/O       | dig-i (Feedback)    |
+|----------------------------|-----------|---------------------|
+|                            | 1         | Is Online           |
+| Preset Recall              | 101-200   |                     |
+|                            | 201-400   | Channel Visible     |
+| Mute Toggle                | 401-600   | Mute Feedback       |
+| Mute On                    | 601-800   |                     |
+| Mute Off                   | 801-1000  |                     |
+| Volume Up                  | 1001-1200 |                     |
+| Volume Down                | 1201-1400 |                     |
 
 #### Analogs
-| an_o (Input/Triggers) | I/O | an_i (Feedback) |
-|-----------------------|-----|-----------------|
-|                       | 1   |                 |
-|                       | 2   |                 |
-|                       | 3   |                 |
-|                       | 4   |                 |
-|                       | 5   |                 |
-
+| an_o (Input/Triggers)      | I/O       | an_i (Feedback)     |
+|----------------------------|-----------|---------------------|
+| Volume Set                 | 201-400   | Volume Feedback     |
+|                            | 401-600   | Volume Type         |
 
 #### Serials
-| serial-o (Input/Triggers) | I/O | serial-i (Feedback) |
-|---------------------------|-----|---------------------|
-|                           | 1   |                     |
-|                           | 2   |                     |
-|                           | 3   |                     |
-|                           | 4   |                     |
-|                           | 5   |                     |
-
+| serial-o (Input/Triggers)  | I/O       | serial-i (Feedback) |
+|----------------------------|-----------|---------------------|
+|                            | 101-200   | Preset Name         |
+|                            | 201-400   | Channel Name        |
