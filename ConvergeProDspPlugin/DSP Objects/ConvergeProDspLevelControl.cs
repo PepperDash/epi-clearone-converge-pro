@@ -87,6 +87,7 @@ namespace ConvergeProDspPlugin
 		/// <param name="values"></param>
 		public void ParseResponse(string command, string[] values)
 		{
+            Debug.Console(1, this, "Parsing response {0} values: '{1}'", command, string.Join(", ", values));
 			if(command == "MUTE")
 			{
 			    if(values[0] == "1")
@@ -111,7 +112,12 @@ namespace ConvergeProDspPlugin
                 }
                 else if (maxLevel > minLevel)
                 {
-                    _volumeLevel = (ushort)(((parsedValue - minLevel) * 65535) / (maxLevel - minLevel));
+                    if (parsedValue >= maxLevel)
+                        _volumeLevel = (ushort)(((parsedValue - minLevel) * 65535) / (maxLevel - minLevel));
+                    else if (parsedValue <= minLevel)
+                        _volumeLevel = (ushort)minLevel;
+                    else      
+                        _volumeLevel = (ushort)(((parsedValue - minLevel) * 65535) / (maxLevel - minLevel));
                     Debug.Console(1, this, "Level {0} VolumeLevel: '{1}'", LevelCustomName, _volumeLevel);
                 }
                 else
@@ -125,8 +131,8 @@ namespace ConvergeProDspPlugin
 			}
 			else if(command == "MINMAX")
 			{
-                minLevel = (ushort)float.Parse(values[0], CultureInfo.InvariantCulture);
-                maxLevel = (ushort)float.Parse(values[1], CultureInfo.InvariantCulture);
+                minLevel = float.Parse(values[0], CultureInfo.InvariantCulture);
+                maxLevel = float.Parse(values[1], CultureInfo.InvariantCulture);
 				Debug.Console(1, this, "Level {0} new min: {1}, new max: {2}", LevelCustomName, minLevel, maxLevel);
 			}
 		}
@@ -166,20 +172,20 @@ namespace ConvergeProDspPlugin
 		/// <param name="level"></param>
 		public void SetVolume(ushort level)
 		{
-			Debug.Console(1, this, "volume: {0}", level);
+			Debug.Console(1, this, "Set Volume: {0}", level);
 			if (AutomaticUnmuteOnVolumeUp && _isMuted)
 			{
 				MuteOff();
 			}
 			if (UseAbsoluteValue)
 			{
-                SendFullCommand("GAIN", new string[] { Channel, Group, level.ToString(), "A" });
+                SendFullCommand("GAIN", new string[] { Channel, Group, level.ToString("N2"), "A" });
 			}
 			else
 			{
-                var newLevel = Scale(level);
-                Debug.Console(1, this, "newVolume: {0}", newLevel);
-                SendFullCommand("GAIN", new string[] { Channel, Group, newLevel.ToString(), "R" });
+                double tempLevel = Scale(level);
+                Debug.Console(1, this, "Set Scaled Volume: {0}", tempLevel);
+                SendFullCommand("GAIN", new string[] { Channel, Group, tempLevel.ToString("N2"), "A" });
 			}
 		}
 

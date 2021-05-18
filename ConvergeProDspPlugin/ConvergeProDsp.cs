@@ -64,7 +64,7 @@ namespace ConvergeProDspPlugin
 			_comm = comm;
 
 			PortGather = new CommunicationGather(_comm, "\x0a");
-			PortGather.LineReceived += this.Port_LineReceived;
+			PortGather.LineReceived += this.ResponseReceived;
 
 			_commMonitor = new GenericCommunicationMonitor(this, _comm, 30000, 121000, 301000, CheckComms);
 
@@ -161,33 +161,37 @@ namespace ConvergeProDspPlugin
 		/// </summary>
 		/// <param name="dev"></param>
 		/// <param name="args"></param>
-		void Port_LineReceived(object dev, GenericCommMethodReceiveTextArgs args)
+		void ResponseReceived(object dev, GenericCommMethodReceiveTextArgs args)
 		{
 			Debug.Console(2, this, "RX: '{0}'", args.Text);
+            HeartbeatTracker = 0;
 			try
 			{
                 if (args.Text.Contains("#"))
                 {
-                    var startPoint = args.Text.IndexOf("#", 0);                          //example = #12 MUTE 5 M 0
-                    HeartbeatTracker = 0;
-                    string[] data = args.Text.Remove(0, startPoint + 1).Split(' ');      //example = [12, MUTE, 5, M, 0]
+                    var startPoint = args.Text.IndexOf("#", 0) + 1;                             //example = #12 MUTE 5 M 0\x0D...
+                    var endPoint = args.Text.IndexOf("\x0D", startPoint);
+                    int length = endPoint - startPoint;
 
+                    string[] data = args.Text.Substring(startPoint, length).Split(' ');         //example = [12, MUTE, 5, M, 0]
+
+                    // data[0] = deviceId
+                    // data[1] = response type
+                    // data[2] = channel
+                    // data[3] = group
+                    // data[4]...data[n] = values
                     if((data.Length >= 5 && (data[1] == "MUTE" || data[1] == "GAIN")) || (data.Length >=6 && data[1] == "MINMAX"))
                     {
                         Debug.Console(1, this, "Found {0} response", data[1]);
                         foreach (KeyValuePair<string, ConvergeProDspLevelControl> controlPoint in LevelControlPoints)
 					    {
-                            if (data[0] == controlPoint.Value.DeviceId && data[1] == controlPoint.Value.Channel && data[3] == controlPoint.Value.Group)
+                            if (data[0] == controlPoint.Value.DeviceId && data[2] == controlPoint.Value.Channel && data[3] == controlPoint.Value.Group)
 						    {
                                 controlPoint.Value.ParseResponse(data[1], data.Skip(4).ToArray());  //send command and any values after the group/channel info
 							    return;
 						    }
 					    }
 				    }
-                }
-                else
-                {
-                    Debug.Console(1, this, "No valid response found, discarding data");
                 }
 			}
 			catch (Exception e)
