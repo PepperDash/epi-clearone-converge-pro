@@ -18,6 +18,8 @@ namespace ConvergeProDspPlugin
 		public bool UseAbsoluteValue { get; set; }
 		public ePdtLevelTypes Type;
 	    private readonly ConvergeProDsp _parent;
+        private const float minimumDb = -65;
+        private const float maximumDb = 20;
 
 		/// <summary>
 		/// Used for debug
@@ -76,8 +78,8 @@ namespace ConvergeProDspPlugin
 			UseAbsoluteValue = config.UseAbsoluteValue;
             Group = config.Group;
             Channel = config.Channel;
-            minLevel = -65;
-            maxLevel = 20;
+            minLevel = minimumDb;
+            maxLevel = maximumDb;
 		}
 
 		/// <summary>
@@ -107,17 +109,22 @@ namespace ConvergeProDspPlugin
 
                 if(UseAbsoluteValue)
                 {
-                    _volumeLevel = (ushort)parsedValue;
+                    if (parsedValue >= maximumDb)
+                        _volumeLevel = ushort.MaxValue;
+                    else if (parsedValue <= minimumDb)
+                        _volumeLevel = ushort.MinValue;
+                    else
+                        _volumeLevel = (ushort)(((parsedValue - minimumDb) * ushort.MaxValue) / (maximumDb - minimumDb));
                     Debug.Console(1, this, "Level {0} VolumeLevel: '{1}'", LevelCustomName, _volumeLevel);
                 }
                 else if (maxLevel > minLevel)
                 {
                     if (parsedValue >= maxLevel)
-                        _volumeLevel = (ushort)(((parsedValue - minLevel) * 65535) / (maxLevel - minLevel));
+                        _volumeLevel = ushort.MaxValue;
                     else if (parsedValue <= minLevel)
-                        _volumeLevel = (ushort)minLevel;
+                        _volumeLevel = ushort.MinValue;
                     else      
-                        _volumeLevel = (ushort)(((parsedValue - minLevel) * 65535) / (maxLevel - minLevel));
+                        _volumeLevel = (ushort)(((parsedValue - minLevel) * ushort.MaxValue) / (maxLevel - minLevel));
                     Debug.Console(1, this, "Level {0} VolumeLevel: '{1}'", LevelCustomName, _volumeLevel);
                 }
                 else
@@ -177,16 +184,17 @@ namespace ConvergeProDspPlugin
 			{
 				MuteOff();
 			}
+            double tempLevel;
 			if (UseAbsoluteValue)
 			{
-                SendFullCommand("GAIN", new string[] { Channel, Group, level.ToString("N2"), "A" });
+                tempLevel = ScaleFull(level);
 			}
 			else
 			{
-                double tempLevel = Scale(level);
-                Debug.Console(1, this, "Set Scaled Volume: {0}", tempLevel);
-                SendFullCommand("GAIN", new string[] { Channel, Group, tempLevel.ToString("N2"), "A" });
+                tempLevel = Scale(level);
 			}
+            Debug.Console(1, this, "Set Scaled Volume: {0}", tempLevel);
+            SendFullCommand("GAIN", new string[] { Channel, Group, tempLevel.ToString("N2"), "A" });
 		}
 
 		/// <summary>
@@ -234,17 +242,28 @@ namespace ConvergeProDspPlugin
 		}
 		
 		/// <summary>
-		/// Scales the input provided
+		/// Scales the input provided based on the min/max values from the DSP
 		/// </summary>
 		/// <param name="input"></param>
 		/// <returns></returns>
 		double Scale(ushort input)
 		{
-			double scaled = (ushort)(input * (maxLevel - minLevel) / 65535) + minLevel;
+			double scaled = (ushort)(input * (maxLevel - minLevel) / ushort.MaxValue) + minLevel;
             double output = Math.Round(scaled, 2);
-            Debug.Console(1, this, "Scaled output: {0}", output);
 			return output;
 		}
+
+        /// <summary>
+        /// Scales the input provided based on the absolute min/max values
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
+        double ScaleFull(ushort input)
+        {
+            double scaled = (ushort)(input * (maximumDb - minimumDb) / ushort.MaxValue) + minimumDb;
+            double output = Math.Round(scaled, 2);
+            return output;
+        }
 	}
 
 	/// <summary>

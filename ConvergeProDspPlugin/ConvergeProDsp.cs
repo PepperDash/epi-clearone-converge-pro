@@ -298,7 +298,7 @@ namespace ConvergeProDspPlugin
                     trilist.SetBoolSigAction(joinMap.ChannelVolumeUp.JoinNumber + x, b => genericChannel.VolumeUp(b));
                     trilist.SetBoolSigAction(joinMap.ChannelVolumeDown.JoinNumber + x, b => genericChannel.VolumeDown(b));
                     // from SiMPL > to Plugin
-                    trilist.SetUShortSigAction(joinMap.ChannelVolume.JoinNumber + x, u => { if (u > 0) { genericChannel.SetVolume(u); } });
+                    trilist.SetUShortSigAction(joinMap.ChannelVolume.JoinNumber + x, u => genericChannel.SetVolume(u));
                 }
                 x++;
             }
