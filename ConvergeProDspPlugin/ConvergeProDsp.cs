@@ -136,7 +136,7 @@ namespace ConvergeProDspPlugin
 			}
 			else
 			{
-				Debug.Console(1, this, "Heartbeat okay");
+				Debug.Console(2, this, "Heartbeat okay");
 			}
 		}
 
@@ -145,14 +145,34 @@ namespace ConvergeProDspPlugin
 		/// </summary>
 		void InitializeDspObjects()
 		{
-			if (_commMonitor != null)
-			{
-				_commMonitor.Start();
-			}
-
             foreach (var channel in LevelControlPoints)
             {
-                channel.Value.GetMinMax();
+                if (channel.Value.HasLevel)
+                {
+                    channel.Value.GetCurrentMinMax();
+                    CrestronEnvironment.Sleep(250);
+                }
+            }
+            foreach (var channel in LevelControlPoints)
+            {
+                if (channel.Value.HasLevel)
+                {
+                    channel.Value.GetCurrentGain();
+                    CrestronEnvironment.Sleep(250);
+                }
+            }
+            foreach (var channel in LevelControlPoints)
+            {
+                if (channel.Value.HasMute)
+                {
+                    channel.Value.GetCurrentMute();
+                    CrestronEnvironment.Sleep(250);
+                }
+            }
+
+            if (_commMonitor != null)
+            {
+                _commMonitor.Start();
             }
 		}
 

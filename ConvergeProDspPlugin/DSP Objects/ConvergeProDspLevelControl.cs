@@ -152,9 +152,25 @@ namespace ConvergeProDspPlugin
         /// <summary>
         /// Polls the DSP for the min and max levels for this object
         /// </summary>
-        public void GetMinMax()
+        public void GetCurrentMinMax()
         {
             SendFullCommand("MINMAX", new string[] { Channel, Group });
+        }
+
+        /// <summary>
+        /// Polls the DSP for the current gain for this object
+        /// </summary>
+        public void GetCurrentGain()
+        {
+            SendFullCommand("GAIN", new string[] { Channel, Group });
+        }
+
+        /// <summary>
+        /// Polls the DSP for the current mute for this object
+        /// </summary>
+        public void GetCurrentMute()
+        {
+            SendFullCommand("MUTE", new string[] { Channel, Group });
         }
 
 		/// <summary>
