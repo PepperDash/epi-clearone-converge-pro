@@ -40,6 +40,7 @@ namespace ConvergeProDspPlugin
 		private uint HeartbeatTracker = 0;
 		public bool ShowHexResponse { get; set; }
         public string DeviceId { get; set; }
+        private bool postActivateComplete = false;
 		
 		
 		/// <summary>
@@ -67,27 +68,24 @@ namespace ConvergeProDspPlugin
 			PortGather.LineReceived += this.ResponseReceived;
 
 			_commMonitor = new GenericCommunicationMonitor(this, _comm, 30000, 121000, 301000, CheckComms);
+            _commMonitor.StatusChange += new EventHandler<MonitorStatusChangeEventArgs>(ConnectionChange);
 
 			LevelControlPoints = new Dictionary<string, ConvergeProDspLevelControl>();
 			CreateDspObjects();
-		}
-
-		/// <summary>
-		/// CustomActivate Override
-		/// </summary>
-		/// <returns></returns>
-		public override bool CustomActivate()
-		{
-			_comm.Connect();
-			_commMonitor.StatusChange += new EventHandler<MonitorStatusChangeEventArgs>(ConnectionChange);
-
-            return base.CustomActivate();
+            
+            AddPostActivationAction(() =>
+            {
+                _comm.Connect();
+                _commMonitor.Start();
+                InitializeDspObjects();
+                postActivateComplete = true;
+            });
 		}
 
 		private void ConnectionChange(object sender, MonitorStatusChangeEventArgs e)
 		{
             Debug.Console(2, this, "Communication monitor state: {0}", e.Status);
-            if (e.Status == MonitorStatus.IsOk)
+            if (e.Status == MonitorStatus.IsOk && postActivateComplete)
 			{
 				InitializeDspObjects();
 			}
@@ -114,8 +112,6 @@ namespace ConvergeProDspPlugin
                     Debug.Console(2, this, "Added Preset {0} {1}", preset.Value.Label, preset.Value.Preset);
 				}
 			}
-
-			InitializeDspObjects();
 		}
 
 		/// <summary>
@@ -168,11 +164,6 @@ namespace ConvergeProDspPlugin
                     channel.Value.GetCurrentMute();
                     CrestronEnvironment.Sleep(250);
                 }
-            }
-
-            if (_commMonitor != null)
-            {
-                _commMonitor.Start();
             }
 		}
 
