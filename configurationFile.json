@@ -1,0 +1,114 @@
+{
+    "system": {},
+    "template": {
+        "devices": [
+            {
+                "type": "rmc3",
+                "name": "rmc3",
+                "group": "processor",
+                "supportedConfigModes": [
+                    "compliance",
+                    "essentials"
+                ],
+                "supportedSystemTypes": [
+                    "hudType",
+                    "presType",
+                    "vtcType",
+                    "custom"
+                ],
+                "supportsCompliance": true,
+                "properties": {
+                    "numberOfComPorts": 6,
+                    "numberOfIrPorts": 8,
+                    "numberOfRelays": 8,
+                    "numberOfDIOPorts": 8
+                },
+                "key": "processor",
+                "uid": 0
+            },
+            {
+                "key": "dsp-1",
+                "uid": 1,
+                "name": "Converge Pro DSP Essentials Plugin",
+                "type": "convergeprodsp",
+                "group": "plugin",
+                "properties": {
+                    "control": {
+                        "method": "com",
+                        "comParams": {
+                            "parity": "None",
+                            "protocol": "RS232",
+                            "baudRate": 57600,
+                            "dataBits": 8,
+                            "softwareHandshake": "None",
+                            "hardwareHandshake": "RTSCTS",
+                            "stopBits": 1
+                        },
+                        "controlPortNumber": 1,
+                        "controlPortDevKey": "processor"
+                    },
+                    "deviceId": "30",
+                    "levelControlBlocks": {
+                        "fader-1": {
+                            "deviceID": "31",
+                            "label": "Room",
+                            "group": "P",
+                            "channel": "A",
+                            "disabled": false,
+                            "hasLevel": true,
+                            "hasMute": true,
+                            "isMic": false
+                        }
+                    },
+                    "presets": {
+                        "preset-1": {
+                            "deviceID": "31",
+                            "label": "System On",
+                            "preset": "1"
+                        },
+                        "preset-2": {
+                            "label": "System Off",
+                            "preset": "2"
+                        },
+                        "preset-3": {
+                            "label": "Default Levels",
+                            "preset": "3"
+                        }
+                    }
+                }
+            },
+            {
+                "key": "dsp-1-bridge",
+                "uid": 4,
+                "name": "Converge Pro Essentials Plugin Bridge",
+                "group": "api",
+                "type": "eiscApi",
+                "properties": {
+                    "control": {
+                        "tcpSshProperties": {
+                            "address": "127.0.0.2",
+                            "port": 0
+                        },
+                        "ipid": "1A",
+                        "method": "ipidTcp"
+                    },
+                    "devices": [
+                        {
+                            "deviceKey": "dsp-1",
+                            "joinStart": 1
+                        }
+                    ]
+                }
+            }
+        ],
+        "info": {
+            "comment": "",
+            "lastUid": 8,
+            "processorType": "rmc3",
+            "requiredControlSofwareVersion": "",
+            "systemType": "huddle"
+        },
+        "rooms": [],
+        "tieLines": []
+    }
+}
