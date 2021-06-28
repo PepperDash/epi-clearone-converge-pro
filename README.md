@@ -152,11 +152,13 @@ The selection below documents the digital, analog, and serial joins used by the 
 #### Analogs
 | an_o (Input/Triggers)      | I/O       | an_i (Feedback)     |
 |----------------------------|-----------|---------------------|
+| Preset Recall              | 100       |                     |
 | Volume Set                 | 201-400   | Volume Feedback     |
 |                            | 401-600   | Volume Type         |
 
 #### Serials
 | serial-o (Input/Triggers)  | I/O       | serial-i (Feedback) |
 |----------------------------|-----------|---------------------|
+| Preset Recall              | 100       |                     |
 |                            | 101-200   | Preset Name         |
 |                            | 201-400   | Channel Name        |
