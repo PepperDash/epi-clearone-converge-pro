@@ -223,10 +223,22 @@ namespace ConvergeProDspPlugin
 			_comm.SendText(s + "\x0D");
 		}
 
+        /// <summary>
+        /// Runs the preset with the number provided
+        /// </summary>
+        /// <param name="n">ushort</param>
+        public void RunPreset(ushort preset)
+        {
+            if (0 < preset && preset <= PresetList.Count && PresetList[preset] != null)
+            {
+                RunPreset(PresetList[preset-1]);
+            }
+        }
+
 		/// <summary>
-		/// Runs the preset with the number provided
+		/// Runs the preset object provided
 		/// </summary>
-		/// <param name="n">ushort</param>
+		/// <param name="n">ConvergeProDspPreset</param>
 		public void RunPreset(ConvergeProDspPreset preset)
 		{
 	        RunPresetByString(preset.Preset);
@@ -327,6 +339,8 @@ namespace ConvergeProDspPlugin
                 }
                 // from SiMPL > to Plugin
                 trilist.StringInput[joinMap.PresetName.JoinNumber + x].StringValue = preset.Label;
+                trilist.SetStringSigAction(joinMap.PresetRecall.JoinNumber, s => RunPresetByString(s));
+                trilist.SetUShortSigAction(joinMap.PresetRecall.JoinNumber, u => RunPreset(u));
                 trilist.SetSigTrueAction(joinMap.PresetRecall.JoinNumber + x, () => RunPreset(thisPreset));
                 x++;
             }
