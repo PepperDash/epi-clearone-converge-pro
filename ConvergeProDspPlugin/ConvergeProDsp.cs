@@ -35,6 +35,7 @@ namespace ConvergeProDspPlugin
         public CommunicationGather PortGather { get; private set; }
 		public Dictionary<string, ConvergeProDspLevelControl> LevelControlPoints { get; private set; }
 		public List<ConvergeProDspPreset> PresetList = new List<ConvergeProDspPreset>();
+		public Dictionary<string, ConvergeProDspDialer> Dialers { get; set; }
 
 		private readonly ConvergeProDspConfig _config;
 		private uint HeartbeatTracker = 0;
@@ -71,6 +72,7 @@ namespace ConvergeProDspPlugin
             _commMonitor.StatusChange += new EventHandler<MonitorStatusChangeEventArgs>(ConnectionChange);
 
 			LevelControlPoints = new Dictionary<string, ConvergeProDspLevelControl>();
+			Dialers = new Dictionary<string, ConvergeProDspDialer>();
 			CreateDspObjects();
             
             AddPostActivationAction(() =>
@@ -95,6 +97,7 @@ namespace ConvergeProDspPlugin
 		{
 			LevelControlPoints.Clear();
 			PresetList.Clear();
+			Dialers.Clear();
 
 			if (_config.LevelControlBlocks != null)
 			{
@@ -112,6 +115,17 @@ namespace ConvergeProDspPlugin
                     Debug.Console(2, this, "Added Preset {0} {1}", preset.Value.Label, preset.Value.Preset);
 				}
 			}
+			if (_config.Dialers != null)
+			{
+				foreach (KeyValuePair<string, ConvergeProDspDialerConfig> dialerConfig in _config.Dialers)
+				{
+					var value = dialerConfig.Value;
+					var key = dialerConfig.Key;
+					this.Dialers.Add(key, new ConvergeProDspDialer(value, this));
+					Debug.Console(2, this, "Added Dialer {0}\n {1}", key, value);
+				}
+			}
+
 		}
 
 		/// <summary>

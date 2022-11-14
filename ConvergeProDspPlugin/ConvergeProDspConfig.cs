@@ -24,6 +24,9 @@ namespace ConvergeProDspPlugin
 
 		[JsonProperty("presets")]
 		public Dictionary<string, ConvergeProDspPreset> Presets { get; set; }
+		
+		[JsonProperty("dialers")]
+		public Dictionary<string, ConvergeProDspDialerConfig> Dialers { get; set; }
 	}
 
 	/// <summary>
@@ -75,5 +78,16 @@ namespace ConvergeProDspPlugin
 
 		[JsonProperty("unmuteOnVolChange")]
 		public bool UnmuteOnVolChange { get; set; }
+	}
+
+	public class ConvergeProDspDialerConfig
+	{
+		[JsonProperty("deviceId")]
+		public string DeviceId { get; set; }
+
+
+
+		[JsonProperty("ClearOnHangup")]
+		public bool ClearOnHangup { get; set; }
 	}
 }
