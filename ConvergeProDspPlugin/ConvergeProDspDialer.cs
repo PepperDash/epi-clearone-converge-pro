@@ -58,7 +58,7 @@ namespace ConvergeProDspPlugin
 		public bool OffHook
 		{
 			get { return _offHook; }
-			private set
+		    set
 			{
 				_offHook = value;
 				OffHookFeedback.FireUpdate();
@@ -358,15 +358,21 @@ namespace ConvergeProDspPlugin
 		/// <param name="item">Use null as the parameter, use of CodecActiveCallItem is not implemented</param>
 		public void EndCall(CodecActiveCallItem item)
 		{
-			Parent.SendLine(string.Format("#{0} TE 1 1", DeviceId));
+			Parent.SendLine(string.Format("#{0} TE 1 0", DeviceId));
 		}
-
+        /// <summary>
+        /// Get Hook state 
+        /// </summary>
+        public void GetHookState()
+        {
+            Parent.SendLine(string.Format("#{0} TE 1", DeviceId));
+        }
 		/// <summary>
 		/// Ends all connectted calls
 		/// </summary>
 		public void EndAllCalls()
 		{
-			Parent.SendLine(string.Format("#{0} TE 1 1", DeviceId));
+			Parent.SendLine(string.Format("#{0} TE 1 0", DeviceId));
 		}
 
 		/// <summary>
@@ -375,7 +381,7 @@ namespace ConvergeProDspPlugin
 		public void AcceptCall()
 		{
 			this.IncomingCall = false;
-			Parent.SendLine(string.Format("#{0} TE 1 0", DeviceId));
+			Parent.SendLine(string.Format("#{0} TE 1 1", DeviceId));
 		}
 
 		/// <summary>
@@ -385,7 +391,7 @@ namespace ConvergeProDspPlugin
 		public void AcceptCall(CodecActiveCallItem item)
 		{
 			this.IncomingCall = false;
-			Parent.SendLine(string.Format("#{0} TE 1 0", DeviceId));
+			Parent.SendLine(string.Format("#{0} TE 1 1", DeviceId));
 		}
 
 		/// <summary>
@@ -465,6 +471,7 @@ namespace ConvergeProDspPlugin
 		/// </summary>
 		public enum EKeypadKeys
 		{
+            Num0,
 			Num1,
 			Num2,
 			Num3,
@@ -474,7 +481,6 @@ namespace ConvergeProDspPlugin
 			Num7,
 			Num8,
 			Num9,
-			Num0,
 			Star,
 			Pound,
 			Clear,

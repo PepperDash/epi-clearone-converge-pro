@@ -177,7 +177,12 @@ namespace ConvergeProDspPlugin
                 {
                     channel.Value.GetCurrentMute();
                     CrestronEnvironment.Sleep(250);
+             
                 }
+            }
+            foreach (var line in Dialers)
+            {
+                line.Value.GetHookState();
             }
 		}
 
@@ -217,6 +222,26 @@ namespace ConvergeProDspPlugin
 						    }
 					    }
 				    }
+                    if(data.Length >=3 && data[1] == "TE")
+                    {
+                        foreach (KeyValuePair<string, ConvergeProDspDialer> dialer in Dialers)
+                        {
+                            if (data[0] == dialer.Value.DeviceId)
+                            {
+                                if (data[3] == "0")
+                                {
+                                    dialer.Value.OffHook = false;
+                                    return;
+                                } 
+                                else if (data[3] == "1")
+                                {
+                                    dialer.Value.OffHook = true;
+                                    return;
+                                }
+                                
+                            }
+                        }
+                    }
                 }
 			}
 			catch (Exception e)
