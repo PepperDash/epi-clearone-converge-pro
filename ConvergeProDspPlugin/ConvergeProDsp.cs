@@ -35,6 +35,7 @@ namespace ConvergeProDspPlugin
         public CommunicationGather PortGather { get; private set; }
 		public Dictionary<string, ConvergeProDspLevelControl> LevelControlPoints { get; private set; }
 		public List<ConvergeProDspPreset> PresetList = new List<ConvergeProDspPreset>();
+		public Dictionary<string, ConvergeProDspDialer> Dialers { get; set; }
 
 		private readonly ConvergeProDspConfig _config;
 		private uint HeartbeatTracker = 0;
@@ -71,6 +72,7 @@ namespace ConvergeProDspPlugin
             _commMonitor.StatusChange += new EventHandler<MonitorStatusChangeEventArgs>(ConnectionChange);
 
 			LevelControlPoints = new Dictionary<string, ConvergeProDspLevelControl>();
+			Dialers = new Dictionary<string, ConvergeProDspDialer>();
 			CreateDspObjects();
             
             AddPostActivationAction(() =>
@@ -95,6 +97,7 @@ namespace ConvergeProDspPlugin
 		{
 			LevelControlPoints.Clear();
 			PresetList.Clear();
+			Dialers.Clear();
 
 			if (_config.LevelControlBlocks != null)
 			{
@@ -112,6 +115,17 @@ namespace ConvergeProDspPlugin
                     Debug.Console(2, this, "Added Preset {0} {1}", preset.Value.Label, preset.Value.Preset);
 				}
 			}
+			if (_config.Dialers != null)
+			{
+				foreach (KeyValuePair<string, ConvergeProDspDialerConfig> dialerConfig in _config.Dialers)
+				{
+					var value = dialerConfig.Value;
+					var key = dialerConfig.Key;
+					this.Dialers.Add(key, new ConvergeProDspDialer(value, this));
+					Debug.Console(2, this, "Added Dialer {0}\n {1}", key, value);
+				}
+			}
+
 		}
 
 		/// <summary>
@@ -163,7 +177,12 @@ namespace ConvergeProDspPlugin
                 {
                     channel.Value.GetCurrentMute();
                     CrestronEnvironment.Sleep(250);
+             
                 }
+            }
+            foreach (var line in Dialers)
+            {
+                line.Value.GetHookState();
             }
 		}
 
@@ -203,6 +222,26 @@ namespace ConvergeProDspPlugin
 						    }
 					    }
 				    }
+                    if(data.Length >=3 && data[1] == "TE")
+                    {
+                        foreach (KeyValuePair<string, ConvergeProDspDialer> dialer in Dialers)
+                        {
+                            if (data[0] == dialer.Value.DeviceId)
+                            {
+                                if (data[3] == "0")
+                                {
+                                    dialer.Value.OffHook = false;
+                                    return;
+                                } 
+                                else if (data[3] == "1")
+                                {
+                                    dialer.Value.OffHook = true;
+                                    return;
+                                }
+                                
+                            }
+                        }
+                    }
                 }
 			}
 			catch (Exception e)
@@ -348,6 +387,66 @@ namespace ConvergeProDspPlugin
                 trilist.SetSigTrueAction(joinMap.PresetRecall.JoinNumber + x, () => RunPreset(thisPreset));
                 x++;
             }
+			// VoIP Dialer
+			uint lineOffset = 0;
+			foreach (var line in Dialers)
+			{
+				var dialer = line;
+
+				var dialerLineOffset = lineOffset;
+				Debug.Console(0, "AddingDialerBridge {0} {1} Offset", dialer.Key, dialerLineOffset);
+
+
+				for (var i = 0; i < joinMap.KeypadNumeric.JoinSpan; i++)
+				{
+					var tempi = i;
+
+					trilist.SetSigTrueAction((joinMap.KeypadNumeric.JoinNumber + (uint)i + dialerLineOffset), () => dialer.Value.SendKeypad((ConvergeProDspDialer.EKeypadKeys)(tempi)));
+				}
+
+				// from SiMPL > to Plugin
+				trilist.SetSigTrueAction((joinMap.KeypadStar.JoinNumber + dialerLineOffset), () => dialer.Value.SendKeypad(ConvergeProDspDialer.EKeypadKeys.Star));
+				trilist.SetSigTrueAction((joinMap.KeypadPound.JoinNumber + dialerLineOffset), () => dialer.Value.SendKeypad(ConvergeProDspDialer.EKeypadKeys.Pound));
+				trilist.SetSigTrueAction((joinMap.KeypadClear.JoinNumber + dialerLineOffset), () => dialer.Value.SendKeypad(ConvergeProDspDialer.EKeypadKeys.Clear));
+				trilist.SetSigTrueAction((joinMap.KeypadBackspace.JoinNumber + dialerLineOffset), () => dialer.Value.SendKeypad(ConvergeProDspDialer.EKeypadKeys.Backspace));
+				// from SiMPL > to Plugin
+				trilist.SetSigTrueAction(joinMap.KeypadDial.JoinNumber + dialerLineOffset, () => dialer.Value.Dial());
+				trilist.SetStringSigAction(joinMap.DialString.JoinNumber + dialerLineOffset, dialer.Value.Dial);
+				trilist.SetSigTrueAction(joinMap.DoNotDisturbToggle.JoinNumber + dialerLineOffset, () => dialer.Value.DoNotDisturbToggle());
+				trilist.SetSigTrueAction(joinMap.DoNotDisturbOn.JoinNumber + dialerLineOffset, () => dialer.Value.DoNotDisturbOn());
+				trilist.SetSigTrueAction(joinMap.DoNotDisturbOff.JoinNumber + dialerLineOffset, () => dialer.Value.DoNotDisturbOff());
+				trilist.SetSigTrueAction(joinMap.AutoAnswerToggle.JoinNumber + dialerLineOffset, () => dialer.Value.AutoAnswerToggle());
+				trilist.SetSigTrueAction(joinMap.AutoAnswerOn.JoinNumber + dialerLineOffset, () => dialer.Value.AutoAnswerOn());
+				trilist.SetSigTrueAction(joinMap.AutoAnswerOff.JoinNumber + dialerLineOffset, () => dialer.Value.AutoAnswerOff());
+				trilist.SetSigTrueAction(joinMap.EndCall.JoinNumber + dialerLineOffset, () => dialer.Value.EndAllCalls());
+				//trilist.SetSigTrueAction(joinMap.IncomingCallAccept.JoinNumber + dialerLineOffset, () => dialer.Value.AcceptCall());
+				//trilist.SetSigTrueAction(joinMap.IncomingCallReject.JoinNumber + dialerLineOffset, () => dialer.Value.RejectCall());
+
+				// from SIMPL > to Plugin
+				trilist.SetStringSigAction(joinMap.DialString.JoinNumber + dialerLineOffset, directDialString => dialer.Value.Dial(directDialString));
+
+				// from Plugin > to SiMPL
+				dialer.Value.DoNotDisturbFeedback.LinkInputSig(trilist.BooleanInput[joinMap.DoNotDisturbToggle.JoinNumber + dialerLineOffset]);
+				dialer.Value.DoNotDisturbFeedback.LinkInputSig(trilist.BooleanInput[joinMap.DoNotDisturbOn.JoinNumber + dialerLineOffset]);
+				dialer.Value.DoNotDisturbFeedback.LinkComplementInputSig(trilist.BooleanInput[joinMap.DoNotDisturbOff.JoinNumber + dialerLineOffset]);
+
+				// from Plugin > to SiMPL
+				dialer.Value.AutoAnswerFeedback.LinkInputSig(trilist.BooleanInput[joinMap.AutoAnswerToggle.JoinNumber + dialerLineOffset]);
+				dialer.Value.AutoAnswerFeedback.LinkInputSig(trilist.BooleanInput[joinMap.AutoAnswerOn.JoinNumber + dialerLineOffset]);
+				dialer.Value.AutoAnswerFeedback.LinkComplementInputSig(trilist.BooleanInput[joinMap.AutoAnswerOff.JoinNumber + dialerLineOffset]);
+				dialer.Value.CallerIdNumberFeedback.LinkInputSig(trilist.StringInput[joinMap.CallerIdNumberFb.JoinNumber + dialerLineOffset]);
+
+				// from Plugin > to SiMPL
+				dialer.Value.OffHookFeedback.LinkInputSig(trilist.BooleanInput[joinMap.KeypadDial.JoinNumber + dialerLineOffset]);
+				dialer.Value.OffHookFeedback.LinkInputSig(trilist.BooleanInput[joinMap.OffHook.JoinNumber + dialerLineOffset]);
+				dialer.Value.OffHookFeedback.LinkComplementInputSig(trilist.BooleanInput[joinMap.OnHook.JoinNumber + dialerLineOffset]);
+				dialer.Value.DialStringFeedback.LinkInputSig(trilist.StringInput[joinMap.DialString.JoinNumber + dialerLineOffset]);
+
+				// from Plugin > to SiMPL
+				dialer.Value.IncomingCallFeedback.LinkInputSig(trilist.BooleanInput[joinMap.IncomingCall.JoinNumber + dialerLineOffset]);
+
+				lineOffset = lineOffset + 50;
+			}
         }
 
 	    public BoolFeedback IsOnline { get { return _commMonitor.IsOnlineFeedback; } }
